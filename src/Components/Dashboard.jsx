@@ -1,23 +1,48 @@
-// src/Components/Dashboard.jsx
-import { useUser } from "@clerk/clerk-react";
+import { useEffect, useState } from "react";
+import { auth, db } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
-  const { isSignedIn, user, isLoaded } = useUser();
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-  if (!isLoaded) return <div>Loading...</div>;
-  if (!isSignedIn) return <div>You are not signed in.</div>;
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (!currentUser) {
+        setLoading(false);
+        return;
+      }
 
-  return (
-    <div className="p-6 text-xl">
-      <h1 className="font-bold">Welcome, {user.fullName} 👋</h1>
-      <p>Email: {user.primaryEmailAddress.emailAddress}</p>
-      <img
-        src={user.imageUrl}
-        alt="User"
-        className="w-20 h-20 rounded-full mt-4 border"
-      />
-    </div>
-  );
+      try {
+        const userRef = doc(db, "users", currentUser.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          const role = userSnap.data().role;
+          if (role === "admin") {
+            navigate("/admin-dashboard");
+          } else {
+            navigate("/student-dashboard"); // or just stay here
+          }
+        } else {
+          console.error("No such user in Firestore");
+        }
+      } catch (error) {
+        console.error("Error fetching user role:", error);
+      }
+
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
+
+  if (loading) return <div>Loading...</div>;
+  return null;
 };
 
 export default Dashboard;
+
+

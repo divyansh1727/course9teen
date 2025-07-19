@@ -1,186 +1,179 @@
 import { useState, useEffect } from "react";
-import { auth, db } from "../firebase";
 import {
-  RecaptchaVerifier,
   signInWithPhoneNumber,
-  onAuthStateChanged,
+  RecaptchaVerifier,
   signInWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
+  onAuthStateChanged,
 } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { auth } from "../firebase";
 import { useNavigate } from "react-router-dom";
-import { serverTimestamp } from "firebase/firestore";
+import { getDoc, doc } from "firebase/firestore";
+import { db } from "../firebase";
 
 export default function SignInPage() {
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
-  const [showOtp, setShowOtp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showOtpInput, setShowOtpInput] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const { uid, email, phoneNumber, photoURL, displayName } = user;
-        // Make sure this is imported
-
-await setDoc(doc(db, "users", uid), {
-  id: uid,
-  name: displayName || "User",
-  email: email || "",
-  phone: phoneNumber || "",
-  imageUrl: photoURL || "",
-  role: "admin", // or "admin" based on use case
-  createdAt: serverTimestamp(), // ✅ adds createdAt
-});
-
-        
-        navigate("/");
-      }
+    onAuthStateChanged(auth, (user) => {
+      if (user) navigate("/register");
     });
+  }, [navigate]);
 
-    return () => unsub();
-  }, []);
-
-  const sendOtp = async () => {
-    try {
-      if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-          size: "invisible",
-          callback: () => {},
-        });
+  const setupRecaptcha = () => {
+    if (!window.recaptchaVerifier) {
+      try {
+        window.recaptchaVerifier = new RecaptchaVerifier(
+          auth,
+          
+          "recaptcha-container",
+          {
+            size: "invisible",
+            callback: () => {
+              console.log("reCAPTCHA verified");
+            },
+            "expired-callback": () => {
+              console.warn("reCAPTCHA expired. Try again.");
+            },
+          },
+          auth
+        );
+        window.recaptchaVerifier.render();
+      } catch (err) {
+        console.error("Recaptcha init error", err);
       }
-
-      const confirmation = await signInWithPhoneNumber(
-        auth,
-        "+91" + phone,
-        window.recaptchaVerifier
-      );
-      console.log("OTP sent:", confirmation);
-      window.confirmationResult = confirmation;
-      setShowOtp(true);
-    } catch (err) {
-      console.error(err);
-      alert("OTP send failed");
     }
   };
 
-  const verifyOtp = async () => {
+  const handleSendOtp = async () => {
+    if (!phone || !phone.startsWith("+") || phone.length < 10) {
+      alert("Please enter a valid phone number with country code, e.g. +919876543210");
+      return;
+    }
+
+    // Uncomment the line below only for testing on localhost
+    // auth.settings.appVerificationDisabledForTesting = true;
+
+    setupRecaptcha();
+
     try {
-      await window.confirmationResult.confirm(otp);
+      const confirmation = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
+      window.confirmationResult = confirmation;
+      setShowOtpInput(true);
+      console.log("OTP sent successfully");
     } catch (err) {
+      console.error("Error sending OTP:", err);
+      alert(err.message);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    try {
+       const result=await window.confirmationResult.confirm(otp);
+       const user = result.user;
+           const userRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists()) {
+      // Already registered
+      navigate("/dashboard"); // or wherever your student dashboard is
+    } else {
+      // First time user - go to register page to fill details
+      navigate("/register");
+    }
+    } catch (err) {
+      console.error("OTP verification failed", err);
       alert("Invalid OTP");
     }
   };
 
-  const loginWithEmail = async () => {
+  const handleEmailLogin = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      navigate("/register");
     } catch (err) {
-      alert("Email/Password login failed");
-    }
-  };
-
-  const loginWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      await setDoc(doc(db, "users", user.uid), {
-        id: user.uid,
-        name: user.displayName || "User",
-        email: user.email || "",
-        phone: user.phoneNumber || "",
-        imageUrl: user.photoURL || "",
-      });
-
-      navigate("/");
-    } catch (error) {
-      console.error("Google login error:", error);
-      alert("Google sign-in failed");
+      console.error("Email login error:", err);
+      alert(err.message);
     }
   };
 
   return (
-  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-100 via-white to-gray-200 px-4">
-    <div className="bg-white/30 backdrop-blur-md p-10 rounded-3xl shadow-2xl max-w-md w-full text-black">
-      <h2 className="text-3xl font-bold text-center mb-6 text-gray-800"> Sign In to 9Teen-Ed </h2>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="bg-white shadow-lg rounded-xl p-8 w-full max-w-md">
+        <h2 className="text-2xl font-bold text-center mb-6">Sign In</h2>
 
-      {!showOtp ? (
-        <>
-          {/* Phone Login */}
-          <div className="space-y-4">
-            <input
-              type="text"
-              placeholder="Phone (India only)"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full p-2 rounded-md text-gray-800 border border-gray-300"
-            />
-            <button
-              onClick={sendOtp}
-              className="w-full bg-green-500 text-white py-2 rounded-md hover:bg-green-600 transition"
-            >
-              Send OTP
-            </button>
-          </div>
-
-          <hr className="my-6 border-gray-300" />
-
-          {/* Email Login */}
-          <div className="space-y-4">
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-2 rounded-md text-gray-800 border border-gray-300"
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-2 rounded-md text-gray-800 border border-gray-300"
-            />
-            <button
-              onClick={loginWithEmail}
-              className="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 transition"
-            >
-              Login with Email
-            </button>
-
-            <button
-              onClick={loginWithGoogle}
-              className="w-full bg-white text-black font-semibold py-2 rounded-md hover:bg-gray-200 transition border"
-            >
-              Continue with Google
-            </button>
-          </div>
-        </>
-      ) : (
-        <div className="space-y-4">
+        {/* Phone Sign-in */}
+        <div className="space-y-3 mb-6">
           <input
             type="text"
-            placeholder="Enter OTP"
-            value={otp}
-            onChange={(e) => setOtp(e.target.value)}
-            className="w-full p-2 rounded-md text-gray-800 border border-gray-300"
+            placeholder="Phone Number (e.g. +919876543210)"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
-            onClick={verifyOtp}
-            className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition"
+            onClick={handleSendOtp}
+            className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition"
           >
-            Verify OTP
+            Send OTP
+          </button>
+
+          {showOtpInput && (
+            <>
+              <input
+                type="text"
+                placeholder="Enter OTP"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              <button
+                onClick={handleVerifyOtp}
+                className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition"
+              >
+                Verify OTP
+              </button>
+            </>
+          )}
+        </div>
+
+        <hr className="my-6" />
+
+        {/* Email Sign-in */}
+        <div className="space-y-3">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={handleEmailLogin}
+            className="w-full bg-purple-600 text-white py-2 rounded-md hover:bg-purple-700 transition"
+          >
+            Login with Email
           </button>
         </div>
-      )}
 
-      <div id="recaptcha-container"></div>
+        {/* Invisible reCAPTCHA */}
+        <div id="recaptcha-container"></div>
+      </div>
     </div>
-  </div>
-);
+  );
 }
+
+
+
+

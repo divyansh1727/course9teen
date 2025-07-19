@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { collection, getDocs, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
@@ -17,23 +17,47 @@ export default function AdminDashboard() {
         return;
       }
 
-      try {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
+      console.log("👤 Current User UID:", user.uid);
+      
 
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
-          alert("Access Denied: Not an Admin");
-          navigate("/");
-          return;
+      try {
+        const userRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userRef);
+
+        if (!userDoc.exists()) {
+          console.warn("🚫 User document not found. Creating one with default admin role (dev only)");
+          
+          // 🔐 Optional: auto-create admin during dev
+          await setDoc(userRef, {
+            id: user.uid,
+            name: user.displayName || "Admin",
+            email: user.email || "",
+            phone: user.phoneNumber || "",
+            imageUrl: user.photoURL || "",
+            role: "admin", // 👈 change manually for prod
+            createdAt: serverTimestamp(),
+          });
+
+          setIsAdmin(true);
+        } else {
+          const data = userDoc.data();
+          console.log("📦 Firestore user doc:", data);
+
+          if (data.role !== "admin") {
+            alert("Access Denied: Not an Admin");
+            navigate("/");
+            return;
+          }
+
+          setIsAdmin(true);
         }
 
-        // ✅ User is admin
-        setIsAdmin(true);
-
+        // ✅ Load all users
         const snapshot = await getDocs(collection(db, "users"));
         const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         setUsers(data);
       } catch (err) {
-        console.error("Failed to check admin role:", err);
+        console.error("❌ Failed to check admin role:", err);
         navigate("/");
       } finally {
         setLoading(false);
@@ -49,7 +73,6 @@ export default function AdminDashboard() {
   };
 
   if (loading) return <div className="text-white text-center mt-20">Loading...</div>;
-
   if (!isAdmin) return null;
 
   return (
@@ -57,12 +80,8 @@ export default function AdminDashboard() {
       <div className="max-w-4xl mx-auto bg-gray-800 rounded-xl p-6 shadow-lg">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-          <button
-            onClick={handleLogout}
-            className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-md"
-          >
-            Sign Out
-          </button>
+  
+
         </div>
 
         <h2 className="text-xl font-semibold mb-4">Registered Users</h2>

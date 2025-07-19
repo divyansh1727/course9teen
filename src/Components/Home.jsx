@@ -1,39 +1,51 @@
 import { useEffect, useState } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth, db } from "../firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { Link } from "react-router-dom";
+import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
+import { Link, useNavigate } from "react-router-dom";
+
 
 export default function Home() {
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [courses, setCourses] = useState([]);
+  const navigate = useNavigate();
 
-  // Listen to auth state and fetch Firestore user data
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
+    let unsubCourses = null;
 
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      setFirebaseUser(user);
       if (user) {
         try {
           const ref = doc(db, "users", user.uid);
           const snapshot = await getDoc(ref);
           if (snapshot.exists()) {
             setUserData(snapshot.data());
-          } else {
-            console.warn("No user data found in Firestore");
           }
+
+          unsubCourses = onSnapshot(collection(db, "courses"), (snap) => {
+            const courseList = snap.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
+            setCourses(courseList);
+          });
         } catch (err) {
-          console.error("Failed to fetch user data:", err);
+          console.error("Error fetching data:", err);
         }
       } else {
         setUserData(null);
+        setCourses([]);
       }
-
       setLoading(false);
     });
 
-    return () => unsub();
+    return () => {
+      unsubAuth();
+      if (unsubCourses) unsubCourses();
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -47,59 +59,109 @@ export default function Home() {
   };
 
   return (
-    <div
-  className="min-h-screen bg-black bg-cover bg-center bg-no-repeat flex items-center justify-center text-white px-4"
-  style={{
-    backgroundImage:`linear-gradient(to bottom, rgba(0,0,0,0.75), rgba(0,0,0,0.9)), url('https://www.9teeninitiative.com/image/tech-illustration.png')`,
-  }}>
-  
-  <div className="backdrop-blur-md bg-white/5 border border-white/10 p-10 rounded-3xl text-center shadow-2xl max-w-lg w-full">
-    <h1 className="text-4xl font-bold mb-6 text-white drop-shadow-md">
-      Welcome to <span className="text-purple-400">9Teen-Ed</span> 📚
-    </h1>
+  <div
+    className="min-h-screen bg-cover bg-center bg-no-repeat text-white px-4 py-12"
+    style={{
+      backgroundImage: `linear-gradient(to bottom, rgba(10,10,10,0.6), rgba(0,0,0,1)),url('/bg/9teen-ed-bg.png')`,
+      backgroundSize: "cover",
+  backgroundPosition: "center",
+  backgroundRepeat: "no-repeat",
+  backgroundBlendMode: "overlay",
+    }}
+  >
+    <div className="max-w-3xl mx-auto bg-black/60 border border-white/10 p-10 rounded-2xl text-center shadow-xl backdrop-blur-md">
+      <h1 className="text-4xl md:text-5xl font-extrabold mb-6 text-white tracking-tight drop-shadow-sm">
+        Welcome to <span className="text-[#b7c26d]">9Teen-Ed</span> 📚
+      </h1>
 
+      {loading ? (
+        <p className="text-lg text-gray-300 animate-pulse">Loading...</p>
+      ) : !firebaseUser ? (
+        <>
+          <p className="mb-6 text-lg text-gray-300">Join us and start learning smart.</p>
+          <div className="flex flex-col sm:flex-row justify-center gap-6">
+            <Link
+              to="/sign-in"
+              className="bg-[#b7c26d] text-black font-medium px-6 py-2 rounded-full hover:bg-[#a4b55b] transition shadow"
+            >
+              Sign In
+            </Link>
+            <Link
+              to="/sign-up"
+              className="bg-transparent border border-white text-white font-medium px-6 py-2 rounded-full hover:bg-white/10 transition"
+            >
+              Sign Up
+            </Link>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="mb-2 text-lg text-gray-200">
+            Hello, <span className="font-semibold text-[#b7c26d]">{userData?.name || "Learner"}</span> 👋
+          </p>
+          {userData?.email && <p className="text-sm text-gray-400">Email: {userData.email}</p>}
+          {userData?.phone && <p className="text-sm text-gray-400">Phone: {userData.phone}</p>}
 
-        {loading ? (
-          <p className="text-lg">Loading...</p>
-        ) : !firebaseUser ? (
-          <>
-            <p className="mb-4 text-xl">Join us to explore and learn!!!</p>
-            <div className="flex justify-center gap-12">
-              <Link
-                to="/sign-in"
-                className="bg-white text-purple-700 font-semibold px-6 py-2 rounded-full shadow hover:bg-gray-100 transition"
-              >
-                Sign In
-              </Link>
-              <Link
-                to="/sign-up"
-                className="bg-white text-purple-700 font-semibold px-6 py-2 rounded-full shadow hover:bg-gray-100 transition"
-              >
-                Sign Up
-              </Link>
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="mb-4 text-lg">
-              Hi, <span className="font-semibold">{userData?.name || "User"}</span> 👋
-            </p>
-            {userData?.email && <p className="mb-2 text-sm">Email: {userData.email}</p>}
-            {userData?.phone && <p className="mb-2 text-sm">Phone: {userData.phone}</p>}
-            {!userData && (
-              <p className="mb-4 text-yellow-100">Setting up your account, please wait...</p>
-            )}
+          <div className="mt-6 space-y-4">
+            <button
+              onClick={() => navigate("/student-dashboard")}
+              className="w-full px-6 py-3 bg-[#b7c26d] text-black rounded-full font-semibold hover:bg-[#a4b55b] transition"
+            >
+              Go to Dashboard
+            </button>
+
             <button
               onClick={handleLogout}
-              className="mt-4 px-6 py-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition"
+              className="w-full px-6 py-3 bg-transparent border border-white text-white rounded-full font-semibold hover:bg-red-600 transition"
             >
               Sign Out
             </button>
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
-  );
+
+    {firebaseUser && courses.length > 0 && (
+      <div className="max-w-6xl mx-auto mt-16 px-4">
+        <h2 className="text-3xl font-semibold mb-8 text-center text-white">📘 Explore Our Courses</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {courses.map((course) => (
+            <div
+              key={course.id}
+              onClick={() => navigate(`/course/${course.id}`)}
+              className="bg-black/70 hover:bg-black/80 transition cursor-pointer p-6 rounded-xl border border-white/10 shadow-md backdrop-blur-sm"
+            >
+              <h3 className="text-xl font-bold text-[#b7c26d] mb-1">{course.title}</h3>
+              <p className="text-gray-300 text-sm mb-2 line-clamp-3">{course.description}</p>
+
+              {course.price && (
+                <p className="text-[#e7e99e] font-medium text-sm mb-1">Price: ₹{course.price}</p>
+              )}
+
+              <p
+                className={`text-sm font-semibold ${
+                  course.price?.toLowerCase() === "free" || course.price === "₹0"
+                    ? "text-green-400"
+                    : "text-red-400"
+                }`}
+              >
+                {course.price?.toLowerCase() === "free" || course.price === "₹0"
+                  ? "Free Course"
+                  : "Paid Course"}
+              </p>
+
+              {course.instructor && (
+                <p className="text-sm text-gray-400 mt-2 italic">Instructor: {course.instructor}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+);
 }
 
+  
 
+  
