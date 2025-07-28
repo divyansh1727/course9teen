@@ -30,11 +30,29 @@ export default function AdminLayout() {
               ➕ Create Course
             </button>
             <button
+  onClick={() => navigate("instructors")}
+  className="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-md"
+>
+  👥 Manage Instructors
+</button>
+
+            <button
   onClick={() => navigate("manage-courses")}
   className="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded-md"
 >
   📋 Manage Courses
 </button>
+
+
+
+<button
+  onClick={() => navigate("manage-testimonials")}
+  className="w-full text-left px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded mb-2"
+>
+  🧾Manage Testimonials
+</button>
+
+
 
             <button
               onClick={handleLogout}
@@ -52,3 +70,4 @@ export default function AdminLayout() {
     </div>
   );
 }
+

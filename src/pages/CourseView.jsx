@@ -24,13 +24,14 @@ function extractYouTubeID(url) {
 
 export default function CourseView() {
   const { id } = useParams();
+  const navigate = useNavigate();
+
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [user, setUser] = useState(null);
   const [enrolling, setEnrolling] = useState(false);
   const [completedModules, setCompletedModules] = useState([]);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -56,12 +57,13 @@ export default function CourseView() {
 
         const enrollmentRef = doc(db, "enrollments", `${currentUser.uid}_${id}`);
         const enrollmentSnap = await getDoc(enrollmentRef);
+
         if (enrollmentSnap.exists()) {
           setIsEnrolled(true);
           setCompletedModules(enrollmentSnap.data().completedModules || []);
         }
-      } catch (error) {
-        console.error("Error loading course:", error);
+      } catch (err) {
+        console.error("Course load error:", err);
       } finally {
         setLoading(false);
       }
@@ -93,10 +95,7 @@ export default function CourseView() {
 
       setIsEnrolled(true);
       alert("Enrollment successful!");
-
-      setTimeout(() => {
-        navigate("/student-dashboard", { state: { justEnrolled: true } });
-      }, 1000);
+      setTimeout(() => navigate("/student-dashboard", { state: { justEnrolled: true } }), 1000);
     } catch (err) {
       console.error("Enroll error:", err);
       alert("Enrollment failed.");
@@ -108,9 +107,9 @@ export default function CourseView() {
   const handleMarkComplete = async (index) => {
     if (!user) return;
     const enrollmentRef = doc(db, "enrollments", `${user.uid}_${id}`);
-    const newCompletedModules = [...new Set([...completedModules, index])];
-    await updateDoc(enrollmentRef, { completedModules: newCompletedModules });
-    setCompletedModules(newCompletedModules);
+    const newCompleted = [...new Set([...completedModules, index])];
+    await updateDoc(enrollmentRef, { completedModules: newCompleted });
+    setCompletedModules(newCompleted);
   };
 
   if (loading) return <div className="text-white text-center mt-20">Loading course...</div>;
@@ -122,11 +121,10 @@ export default function CourseView() {
         <p className="text-gray-300 mb-6">{course?.description}</p>
 
         {isEnrolled ? (
-          <div className="mt-4 flex flex-col items-start space-y-3">
+          <div className="flex flex-col items-start space-y-3 mb-6">
             <span className="inline-block px-4 py-1 text-sm bg-green-700 text-white rounded-full">
               ✅ You are enrolled
             </span>
-
             <button
               onClick={() => navigate("/student-dashboard")}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold"
@@ -145,103 +143,104 @@ export default function CourseView() {
             {enrolling ? "Enrolling..." : "Enroll Now"}
           </button>
         )}
-         {isEnrolled && course.modules && course.modules.length > 0 && (
-          <div className="mt-6">
-            <h3 className="text-lg font-semibold text-green-400 mb-2">Your Progress:</h3>
-            <ProgressBar courseId={id} totalModules={course.modules.length} />
-          </div>
+
+        {isEnrolled && course.modules?.length > 0 && (
+          <>
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold text-green-400 mb-2">Your Progress:</h3>
+              <ProgressBar
+  courseId={id}
+  totalModules={course.modules.length}
+  completedModules={completedModules}
+/>
+
+            </div>
+
+            {course.modules.map((module, index) => {
+              let resources = [];
+
+              if (Array.isArray(module.resources)) {
+                resources = module.resources;
+              } else if (typeof module.resources === "string") {
+                try {
+                  resources = JSON.parse(module.resources);
+                } catch {
+                  resources = [];
+                }
+              }
+
+              return (
+                <div key={index} className="mb-10 bg-gray-700 p-4 rounded-lg mt-6">
+                  <h2 className="text-xl font-semibold mb-2">{module.title}</h2>
+
+                  {module.videoUrl ? (
+                    <>
+                      <iframe
+                        className="w-full h-64 rounded-lg mb-4"
+                        src={getYouTubeEmbedUrl(module.videoUrl)}
+                        title={module.title}
+                        frameBorder="0"
+                        allowFullScreen
+                      ></iframe>
+
+                      
+                    </>
+                  ) : (
+                    <p className="text-red-400">No video available for this module.</p>
+                  )}
+
+                  {resources.length > 0 ? (
+                    <div>
+                      <h4 className="font-semibold mb-1 text-blue-300">Resources:</h4>
+                      <ul className="list-disc list-inside text-blue-400">
+                        {resources.map((res, idx) => (
+                          <li key={idx}>
+                            <a
+                              href={res.url?.trim()}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline"
+                            >
+                              {res.label?.trim() || `Resource ${idx + 1}`}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="text-gray-400">No resources available for this module.</p>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap gap-4">
+                    <button
+                      onClick={() => handleMarkComplete(index)}
+                      disabled={completedModules.includes(index)}
+                      className={`px-4 py-2 rounded-lg text-white font-semibold ${
+                        completedModules.includes(index)
+                          ? "bg-green-600 cursor-not-allowed"
+                          : "bg-blue-600 hover:bg-blue-700"
+                      }`}
+                    >
+                      {completedModules.includes(index) ? "✅ Module Completed" : "Mark as Complete"}
+                    </button>
+
+                    <button
+                      onClick={() => navigate(`/test/${id}/${index}`)}
+                      className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black rounded-lg font-semibold"
+                    >
+                      Start Test for this Module
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </>
         )}
 
-        {isEnrolled && course.modules && course.modules.length > 0 ? (
-
-
-          course.modules.map((module, index) => {
-            let resources = [];
-
-            if (Array.isArray(module.resources)) {
-              resources = module.resources;
-            } else if (typeof module.resources === "string") {
-              try {
-                resources = JSON.parse(module.resources);
-              } catch {
-                resources = [];
-              }
-            }
-
-            return (
-              <div key={index} className="mb-10 bg-gray-700 p-4 rounded-lg mt-6">
-                <h2 className="text-xl font-semibold mb-2">{module.title}</h2>
-
-                {module.videoUrl ? (
-                  <>
-                    <iframe
-                      className="w-full h-64 rounded-lg mb-4"
-                      src={getYouTubeEmbedUrl(module.videoUrl)}
-                      title={module.title}
-                      frameBorder="0"
-                      allowFullScreen
-                    ></iframe>
-
-                    <img
-                      src={`https://img.youtube.com/vi/${extractYouTubeID(module.videoUrl)}/0.jpg`}
-                      alt="Video thumbnail"
-                      className="w-full rounded-lg mt-2"
-                    />
-                  </>
-                ) : (
-                  <p className="text-red-400">No video available for this module.</p>
-                )}
-
-
-                {resources.length > 0 ? (
-                  <div>
-                    <h4 className="font-semibold mb-1 text-blue-300">Resources:</h4>
-                    <ul className="list-disc list-inside text-blue-400">
-                      {resources.map((res, idx) => (
-                        <li key={idx}>
-                          <a
-                            href={res.url?.trim()}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline"
-                          >
-                            {res.label?.trim() || `Resource ${idx + 1}`}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <p className="text-gray-400">No resources available for this module.</p>
-                )}
-
-                <button
-                  onClick={() => handleMarkComplete(index)}
-                  className={`mt-4 px-4 py-2 rounded-lg text-white font-semibold ${
-                    completedModules.includes(index)
-                      ? "bg-green-600 cursor-not-allowed"
-                      : "bg-blue-600 hover:bg-blue-700"
-                  }`}
-                  disabled={completedModules.includes(index)}
-                >
-                  {completedModules.includes(index) ? "✅ Module Completed" : "Mark as Complete"}
-                </button>
-                <button
-      onClick={() => navigate(`/test/${id}/${index}`)}
-      className="mt-4 ml-4 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black rounded-lg font-semibold"
-    >
-      Start Test for this Module
-    </button>
-              </div>
-            );
-          })
-        ) : isEnrolled ? (
+        {isEnrolled && (!course.modules || course.modules.length === 0) && (
           <p className="text-gray-400 mt-6">No modules added to this course yet.</p>
-        ) : null}
+        )}
       </div>
     </div>
   );
 }
-
-
-

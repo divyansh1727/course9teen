@@ -9,13 +9,15 @@ import {
   getDocs,
   query,
   where,
-  deleteDoc,
 } from "firebase/firestore";
+import CourseCard from "../Components/CourseCard";
 
 export default function StudentDashboard() {
   const [userData, setUserData] = useState(null);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState(""); // ✅ NEW
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,32 +40,33 @@ export default function StudentDashboard() {
         const userInfo = userSnap.data();
         setUserData(userInfo);
 
-        // ✅ Fetch enrollments
         const enrollmentSnap = await getDocs(
           query(collection(db, "enrollments"), where("userId", "==", user.uid))
         );
 
-        const enrolledCourseIds = [];
         const coursePromises = enrollmentSnap.docs.map(async (enrollDoc) => {
           const { courseId } = enrollDoc.data();
           const courseRef = doc(db, "courses", courseId);
           const courseSnap = await getDoc(courseRef);
 
           if (courseSnap.exists()) {
-            enrolledCourseIds.push(courseId);
-            return { id: courseSnap.id, ...courseSnap.data() };
+            const countSnap = await getDocs(
+              query(collection(db, "enrollments"), where("courseId", "==", courseId))
+            );
+
+            return {
+              id: courseSnap.id,
+              ...courseSnap.data(),
+              studentCount: countSnap.size,
+            };
           } else {
             console.warn(`❌ Skipping deleted courseId: ${courseId}`);
-
-            // Optional: remove orphan enrollment
-            // await deleteDoc(enrollDoc.ref);
             return null;
           }
         });
 
         const enrolledCourses = (await Promise.all(coursePromises)).filter(Boolean);
 
-        // ✅ Remove duplicates (in case)
         const uniqueCourses = enrolledCourses.filter(
           (course, index, self) =>
             index === self.findIndex((c) => c.id === course.id)
@@ -85,7 +88,15 @@ export default function StudentDashboard() {
     navigate("/sign-in");
   };
 
-  if (loading) return <div className="text-white text-center mt-20">Loading...</div>;
+  // ✅ Filter courses by search term
+  const filteredCourses = courses.filter(
+    (course) =>
+      course.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      course.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading)
+    return <div className="text-white text-center mt-20">Loading...</div>;
 
   return (
     <div className="min-h-screen bg-gray-600 text-white p-12">
@@ -94,23 +105,34 @@ export default function StudentDashboard() {
           <h1 className="text-2xl font-bold">
             Welcome, {userData?.name}! 😄
           </h1>
-          
         </div>
 
-        <h2 className="text-xl font-bold mb-2">Your Courses</h2>
-        {courses.length === 0 ? (
+        <h2 className="text-xl font-bold mb-4">Your Courses</h2>
+
+        {/* ✅ Search Input */}
+        <input
+          type="text"
+          placeholder="Search courses..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full mb-6 p-2 rounded bg-gray-700 text-white border border-yellow-400 focus:outline-none"
+        />
+
+        {filteredCourses.length === 0 ? (
           <div className="text-center py-20 text-gray-300">
-            <p className="text-xl mb-4">📭 You’re not enrolled in any courses yet...</p>
+            <p className="text-xl mb-4">
+              📭 No matching courses found...
+            </p>
             <button
               onClick={() => navigate("/browse-courses")}
               className="mt-2 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md transition"
             >
-              Browse Courses
+              Browse All Courses
             </button>
           </div>
         ) : (
           <div className="space-y-4">
-            {courses.map((course) => (
+            {filteredCourses.map((course) => (
               <div
                 key={course.id}
                 onClick={() => navigate(`/course/${course.id}`)}
@@ -118,6 +140,9 @@ export default function StudentDashboard() {
               >
                 <h3 className="text-lg font-bold">{course.title}</h3>
                 <p className="text-sm text-gray-300">{course.description}</p>
+                <div className="text-xs text-gray-400 mt-1">
+                  👥 {course.studentCount ?? 0} students enrolled
+                </div>
               </div>
             ))}
           </div>
@@ -126,4 +151,3 @@ export default function StudentDashboard() {
     </div>
   );
 }
-

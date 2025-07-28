@@ -26,8 +26,10 @@ export default function ProgressBar({ courseId, totalModules }) {
 
       if (enrollmentSnap.exists()) {
         const data = enrollmentSnap.data();
-        const completedCount = data.completedModules?.length || 0;
-        const calculated = (completedCount / totalModules) * 100;
+        const completedCount = completedModules.length;
+        const completedModules =Data.completedModules || [];
+
+        const calculated = totalModules === 0 ? 0 : Math.floor((completedCount / totalModules)) * 100;
         setPercent(calculated);
       }
     };
@@ -91,7 +93,6 @@ export default function ProgressBar({ courseId, totalModules }) {
         format: [600, 400],
       });
 
-      // Background
       docPdf.addImage(
         bgImg,
         "PNG",
@@ -101,10 +102,8 @@ export default function ProgressBar({ courseId, totalModules }) {
         docPdf.internal.pageSize.getHeight()
       );
 
-      // Logo
       docPdf.addImage(logoImg, "PNG", 40, 30, 80, 80);
 
-      // Title and Certificate Text
       docPdf.setFont("helvetica", "bold");
       docPdf.setFontSize(20);
       docPdf.text("Certificate of Completion", 300, 110, { align: "center" });
@@ -129,17 +128,14 @@ export default function ProgressBar({ courseId, totalModules }) {
       docPdf.setFontSize(12);
       docPdf.text(`on ${dateStr}`, 300, 260, { align: "center" });
 
-      // Signature
       docPdf.addImage(signatureImg, "PNG", 420, 275, 100, 40);
       docPdf.setFontSize(12);
       docPdf.text("Divyansh Singh", 470, 325, { align: "center" });
       docPdf.line(420, 330, 540, 330);
       docPdf.text("Instructor Signature", 480, 345, { align: "center" });
 
-      // Save PDF
       docPdf.save(`${courseTitle}_certificate.pdf`);
 
-      // Firestore record
       await setDoc(doc(db, "certificates", `${user.uid}_${courseId}`), {
         userId: user.uid,
         courseId,

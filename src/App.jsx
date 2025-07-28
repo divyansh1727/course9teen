@@ -18,9 +18,19 @@ import EditCourse from "./pages/EditCourse";
 import AdminTestPage from "./pages/AdminTestPage"; 
 import StudentQuizPage from "./pages/StudentQuizPage";
 import AdminTestProgressPage from "./pages/AdminTestProgressPage";
-
-
-
+import FreeCourses from "./pages/FreeCourses";
+import CourseDetail from "./pages/CourseDetail";
+import InstructorPage from "./pages/InstructorPage";
+import InstructorDetail from "./pages/InstructorDetail";
+import EditInstructor from "./pages/EditInstructor";
+import ManageInstructors from "./pages/ManageInstructors";
+import AddInstructor from "./pages/AdminAddInstructor";
+import NotAuthorized from "./pages/NotAuthorized";
+import TestimonialsSection from "./Components/TestimonialsSection";
+import ManageTestimonials from "./pages/ManageTestimonials";
+import EditTestimonial from "./pages/EditTestimonial";
+import AddTestimonial from "./pages/AddTestimonial";
+import './index.css';
 
 function App() {
   const location = useLocation();
@@ -33,6 +43,7 @@ function App() {
       {!shouldHideLayout && <Navbar />}
 
       <Routes>
+        {/* Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/sign-in" element={<SignInPage />} />
         <Route path="/sign-up" element={<SignUpPage />} />
@@ -42,31 +53,41 @@ function App() {
         <Route path="/register" element={<RegisterForm />} />
         <Route path="/browse-courses" element={<BrowseCourses />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="test/:courseId/:moduleIndex" element={<StudentQuizPage />} />
+        <Route path="/test/:courseId/:moduleIndex" element={<StudentQuizPage />} />
+        <Route path="/free-courses" element={<FreeCourses />} />
+        <Route path="/course-detail/:courseId" element={<CourseDetail />} />
+        <Route path="/instructor/:instructorId" element={<InstructorDetail />} />
+        <Route path="/not-authorized" element={<NotAuthorized />} />
+        <Route path="instructor/:instructorId" element={<InstructorPage />} />
+        <Route path="/testimonials" element={<TestimonialsSection />} />
 
 
-        {/* ✅ Admin Routes Nested */}
+        {/* Admin Routes Nested under AdminLayout */}
         <Route path="/admin" element={<AdminLayout />}>
-  <Route index element={<Navigate to="create-course" />} />
-  <Route path="dashboard" element={<AdminDashboard />} />
-  <Route path="create-course" element={<AdminCreateCourse />} />
-  <Route path="manage-courses" element={<ManageCourses />} /> 
-  <Route path="edit-course/:id" element={<EditCourse />} /> 
-  <Route path="test/:courseId/:moduleIndex" element={<AdminTestPage />} />
-  <Route path="courses/:courseId/module/:moduleIndex/progress" element={<AdminTestProgressPage />} />
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="create-course" element={<AdminCreateCourse />} />
+          <Route path="manage-courses" element={<ManageCourses />} />
+          <Route path="edit-course/:id" element={<EditCourse />} />
+          <Route path="courses/:courseId/module/:moduleIndex/test" element={<AdminTestPage />} />
+          <Route path="courses/:courseId/module/:moduleIndex/progress" element={<AdminTestProgressPage />} />
+          <Route path="add-instructor" element={<AddInstructor />} />
+          <Route path="edit-instructor/:id" element={<EditInstructor />} />
+          <Route path="instructors" element={<ManageInstructors />} />
+          <Route path="manage-testimonials" element={<ManageTestimonials />} />
+          <Route path="edit-testimonial/:testimonialId" element={<EditTestimonial />} />
+          <Route path="add-testimonial" element={<AddTestimonial />} />
 
-  </Route>
-
-        
+        </Route>
       </Routes>
 
       {!shouldHideLayout && <Footer />}
-      </>
+    </>
   );
 }
-    
 
 export default App;
+
 
 
 

@@ -18,10 +18,27 @@ export default function SignInPage() {
   const [showOtpInput, setShowOtpInput] = useState(false);
   const navigate = useNavigate();
 
+  const adminEmail = "admin@coursesell.com";
+
   useEffect(() => {
-    onAuthStateChanged(auth, (user) => {
-      if (user) navigate("/register");
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        if (user.email === adminEmail) {
+          navigate("/admin");
+        } else {
+          const userRef = doc(db, "users", user.uid);
+          const userSnap = await getDoc(userRef);
+
+          if (userSnap.exists()) {
+            navigate("/dashboard"); // Registered student
+          } else {
+            navigate("/register"); // New student
+          }
+        }
+      }
     });
+
+    return () => unsub();
   }, [navigate]);
 
   const setupRecaptcha = () => {
@@ -29,7 +46,6 @@ export default function SignInPage() {
       try {
         window.recaptchaVerifier = new RecaptchaVerifier(
           auth,
-          
           "recaptcha-container",
           {
             size: "invisible",
@@ -55,9 +71,6 @@ export default function SignInPage() {
       return;
     }
 
-    // Uncomment the line below only for testing on localhost
-    // auth.settings.appVerificationDisabledForTesting = true;
-
     setupRecaptcha();
 
     try {
@@ -73,18 +86,17 @@ export default function SignInPage() {
 
   const handleVerifyOtp = async () => {
     try {
-       const result=await window.confirmationResult.confirm(otp);
-       const user = result.user;
-           const userRef = doc(db, "users", user.uid);
-    const userSnap = await getDoc(userRef);
+      const result = await window.confirmationResult.confirm(otp);
+      const user = result.user;
 
-    if (userSnap.exists()) {
-      // Already registered
-      navigate("/dashboard"); // or wherever your student dashboard is
-    } else {
-      // First time user - go to register page to fill details
-      navigate("/register");
-    }
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        navigate("/dashboard");
+      } else {
+        navigate("/register");
+      }
     } catch (err) {
       console.error("OTP verification failed", err);
       alert("Invalid OTP");
@@ -93,13 +105,30 @@ export default function SignInPage() {
 
   const handleEmailLogin = async () => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      navigate("/register");
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      const user = result.user;
+
+      if (user.email === adminEmail) {
+        navigate("/admin");
+      } else {
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          navigate("/dashboard");
+        } else {
+          navigate("/register");
+        }
+      }
     } catch (err) {
       console.error("Email login error:", err);
       alert(err.message);
     }
   };
+
+  // The rest of your UI code goes here (inputs, buttons, etc.)
+
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">

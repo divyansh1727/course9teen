@@ -1,31 +1,39 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { db } from "../firebase";
 import {
   collection,
+  getDocs,
   addDoc,
-  serverTimestamp,
-  onSnapshot,
   deleteDoc,
   doc,
-  getDoc,
+  serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
+import { db } from "../firebase";
 
 export default function AdminTestPage() {
   const { courseId, moduleIndex } = useParams();
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(["", "", "", ""]);
   const [correctAnswer, setCorrectAnswer] = useState(0);
+  const [questions, setQuestions] = useState([]);
   const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [questionsList, setQuestionsList] = useState([]);
-  const [editId, setEditId] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleOptionChange = (value, index) => {
-    const updated = [...options];
-    updated[index] = value;
-    setOptions(updated);
+  const [editingId, setEditingId] = useState(null); // ✅ for edit mode
+
+  const testRef = collection(db, "tests", `${courseId}_${moduleIndex}`, "questions");
+
+  useEffect(() => {
+    fetchQuestions();
+  }, []);
+
+  const fetchQuestions = async () => {
+    setLoading(true);
+    const snap = await getDocs(testRef);
+    const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    setQuestions(list);
+    setLoading(false);
   };
 
   const handleSubmit = async () => {
@@ -34,11 +42,18 @@ export default function AdminTestPage() {
       return;
     }
 
-    setLoading(true);
-    const testRef = collection(db, "tests", `${courseId}_${moduleIndex}`, "questions");
-
-    try {
-      // 1. Add test question
+    if (editingId) {
+      // ✅ Update existing question
+      await updateDoc(doc(testRef, editingId), {
+        question,
+        options,
+        correctAnswer,
+        updatedAt: serverTimestamp(),
+      });
+      setMessage("✅ Question updated.");
+      setEditingId(null);
+    } else {
+      // ✅ Add new question
       await addDoc(testRef, {
         question,
         options,
@@ -47,143 +62,141 @@ export default function AdminTestPage() {
         moduleIndex: parseInt(moduleIndex),
         createdAt: serverTimestamp(),
       });
-
-      // 2. Update course.modules[moduleIndex].hasTest = true
-      const courseRef = doc(db, "courses", courseId);
-      const courseSnap = await getDoc(courseRef);
-      if (courseSnap.exists()) {
-        const courseData = courseSnap.data();
-        const modules = [...courseData.modules];
-
-        if (!modules[parseInt(moduleIndex)].hasTest) {
-          modules[parseInt(moduleIndex)].hasTest = true;
-
-          await updateDoc(courseRef, {
-            modules:modules
-          });
-        }
-      }
-
-      setMessage("✅ Test saved successfully!");
-      setQuestion("");
-      setOptions(["", "", "", ""]);
-      setCorrectAnswer(0);
-    } catch (err) {
-      console.error(err);
-      setMessage("❌ Error saving test.");
+      setMessage("✅ Question added.");
     }
 
-    setLoading(false);
+    setQuestion("");
+    setOptions(["", "", "", ""]);
+    setCorrectAnswer(0);
+    fetchQuestions();
   };
 
-  const handleDelete = async (questionId) => {
-    const ref = doc(db, "tests", `${courseId}_${moduleIndex}`, "questions", questionId);
-    try {
-      await deleteDoc(ref);
-    } catch (err) {
-      console.error("Error deleting:", err);
-    }
+  const handleEdit = (q) => {
+    setQuestion(q.question);
+    setOptions(q.options);
+    setCorrectAnswer(q.correctAnswer);
+    setEditingId(q.id);
+    setMessage("✏️ Editing mode. Make changes and press Update.");
   };
 
-  useEffect(() => {
-    const qRef = collection(db, "tests", `${courseId}_${moduleIndex}`, "questions");
+  const handleDelete = async (id) => {
+    const confirm = window.confirm("⚠️ Are you sure you want to delete this question?");
+    if (!confirm) return;
 
-    const unsubscribe = onSnapshot(qRef, (snapshot) => {
-      const questions = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setQuestionsList(questions);
-    });
-
-    return () => unsubscribe();
-  }, [courseId, moduleIndex]);
+    await deleteDoc(doc(testRef, id));
+    fetchQuestions();
+    setMessage("🗑️ Question deleted.");
+  };
 
   return (
-    <div className="max-w-xl mx-auto mt-10 bg-gray-800 p-6 rounded-lg text-white">
-      <h2 className="text-2xl font-bold mb-4">Create Test for Module {moduleIndex}</h2>
+    <div className="max-w-4xl mx-auto text-white p-6">
+      <h2 className="text-2xl font-bold mb-4">Module {moduleIndex} - Test Editor</h2>
 
-      <label className="block mb-2 font-semibold">Question:</label>
-      <input
-        type="text"
-        value={question}
-        onChange={(e) => setQuestion(e.target.value)}
-        className="w-full p-2 mb-4 rounded text-black"
-      />
+      <div className="bg-gray-800 p-4 rounded shadow mb-6">
+        <h3 className="font-semibold mb-2">{editingId ? "Edit Question" : "Add New Question"}</h3>
 
-      <label className="block mb-2 font-semibold">Options:</label>
-      {options.map((opt, idx) => (
         <input
-          key={idx}
           type="text"
-          value={opt}
-          onChange={(e) => handleOptionChange(e.target.value, idx)}
-          placeholder={`Option ${idx + 1}`}
-          className="w-full p-2 mb-2 rounded text-black"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="Enter question"
+          className="w-full p-2 mb-3 bg-gray-900 border border-gray-700 rounded"
         />
-      ))}
 
-      <label className="block mb-2 font-semibold">Correct Answer (0–3):</label>
-      <input
-        type="number"
-        value={correctAnswer}
-        onChange={(e) => setCorrectAnswer(Number(e.target.value))}
-        min={0}
-        max={3}
-        className="w-full p-2 mb-4 rounded text-black"
-      />
+        {options.map((opt, idx) => (
+          <input
+            key={idx}
+            type="text"
+            value={opt}
+            onChange={(e) =>
+              setOptions((prev) => {
+                const copy = [...prev];
+                copy[idx] = e.target.value;
+                return copy;
+              })
+            }
+            placeholder={`Option ${idx + 1}`}
+            className="w-full p-2 mb-2 bg-gray-900 border border-gray-700 rounded"
+          />
+        ))}
 
-      <button
-        onClick={handleSubmit}
-        disabled={loading}
-        className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-white w-full"
-      >
-        {loading ? "Saving..." : "Save Test"}
-      </button>
+        <div className="mb-3">
+          <label className="text-sm">Correct Option Index (0-3):</label>
+          <input
+            type="number"
+            min={0}
+            max={3}
+            value={correctAnswer}
+            onChange={(e) => setCorrectAnswer(parseInt(e.target.value))}
+            className="ml-2 w-16 p-1 bg-gray-900 border border-gray-700 rounded"
+          />
+        </div>
 
-      {message && <p className="mt-4 text-center">{message}</p>}
+        <button
+          onClick={handleSubmit}
+          className={`${
+            editingId ? "bg-green-500 hover:bg-green-600" : "bg-blue-500 hover:bg-blue-600"
+          } px-4 py-2 rounded`}
+        >
+          {editingId ? "✅ Update Question" : "➕ Add Question"}
+        </button>
 
-      <hr className="my-6 border-gray-600" />
+        {editingId && (
+          <button
+            onClick={() => {
+              setEditingId(null);
+              setQuestion("");
+              setOptions(["", "", "", ""]);
+              setCorrectAnswer(0);
+              setMessage("❌ Edit cancelled.");
+            }}
+            className="ml-4 text-sm text-yellow-400 underline"
+          >
+            Cancel Edit
+          </button>
+        )}
 
-      <h3 className="text-xl font-semibold mb-4">Saved Questions</h3>
-      {questionsList.length === 0 ? (
-        <p className="text-gray-400">No questions added yet.</p>
+        {message && <p className="mt-2 text-yellow-300">{message}</p>}
+      </div>
+
+      <h3 className="text-xl font-semibold mb-3">Existing Questions</h3>
+      {loading ? (
+        <p>Loading...</p>
+      ) : questions.length === 0 ? (
+        <p>No questions added yet.</p>
       ) : (
         <ul className="space-y-4">
-          {questionsList.map((q, idx) => (
-            <li key={q.id} className="bg-gray-700 p-4 rounded">
-              <p className="font-semibold">
-                {idx + 1}. {q.question}
-              </p>
-              <ul className="pl-4 mt-2 space-y-1">
-                {q.options.map((opt, i) => (
-                  <li
-                    key={i}
-                    className={`${i === q.correctAnswer ? "text-green-400 font-bold" : ""}`}
+          {questions.map((q, i) => (
+            <li key={q.id} className="bg-gray-900 p-4 rounded shadow">
+              <div className="flex justify-between items-center">
+                <h4 className="font-bold">
+                  Q{i + 1}: {q.question}
+                </h4>
+                <div className="space-x-3 text-sm">
+                  <button
+                    onClick={() => handleEdit(q)}
+                    className="text-blue-400 hover:underline"
                   >
-                    {i + 1}. {opt}
+                    ✏️ Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(q.id)}
+                    className="text-red-400 hover:underline"
+                  >
+                    ❌ Delete
+                  </button>
+                </div>
+              </div>
+              <ul className="ml-4 mt-2 list-disc text-sm">
+                {q.options.map((opt, idx) => (
+                  <li
+                    key={idx}
+                    className={idx === q.correctAnswer ? "text-green-400 font-semibold" : ""}
+                  >
+                    {opt}
                   </li>
                 ))}
               </ul>
-              <button
-                onClick={() => {
-                  setQuestion(q.question);
-                  setOptions(q.options);
-                  setCorrectAnswer(q.correctAnswer);
-                  setEditId(q.id);
-                  setMessage("📝 Editing selected question...");
-                }}
-                className="mt-2 mr-3 text-sm text-yellow-400 hover:underline"
-              >
-                Edit
-              </button>
-
-              <button
-                onClick={() => handleDelete(q.id)}
-                className="mt-2 text-sm text-red-400 hover:underline"
-              >
-                Delete
-              </button>
             </li>
           ))}
         </ul>
@@ -191,4 +204,3 @@ export default function AdminTestPage() {
     </div>
   );
 }
-

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
+import CourseCard from "../Components/CourseCard";
 
 export default function BrowseCourses() {
   const [courses, setCourses] = useState([]);
@@ -27,7 +28,8 @@ export default function BrowseCourses() {
     fetchCourses();
   }, []);
 
-  if (loading) return <div className="text-white text-center mt-10">Loading courses...</div>;
+  if (loading)
+    return <div className="text-white text-center mt-10">Loading courses...</div>;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
@@ -39,17 +41,11 @@ export default function BrowseCourses() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {courses.map((course) => (
-              <div
+              <CourseCard
                 key={course.id}
-                onClick={() => navigate(`/course/${course.id}`)}
-                className="bg-gray-800 p-6 rounded-lg shadow-lg hover:bg-gray-700 cursor-pointer transition"
-              >
-                <h2 className="text-xl font-bold mb-2">{course.title}</h2>
-                <p className="text-gray-300">{course.description}</p>
-                {course.instructor && (
-                  <p className="text-sm text-gray-400 mt-1">Instructor: {course.instructor}</p>
-                )}
-              </div>
+                course={course}
+                courseId={course.id}
+              />
             ))}
           </div>
         )}
