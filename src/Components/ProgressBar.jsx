@@ -1,70 +1,44 @@
+// src/Components/ProgressBar.jsx
 import { useEffect, useState } from "react";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import jsPDF from "jspdf";
-import logo from "../assets/logo.png";
 import signature from "../assets/signature.png";
 import certBg from "../assets/certificate-bg.png";
+import logo from "../assets/logo.png";
 
-export default function ProgressBar({ courseId, totalModules }) {
+export default function ProgressBar({ courseId, totalModules, completedModules }) {
   const [percent, setPercent] = useState(0);
   const [eligible, setEligible] = useState(false);
   const [course, setCourse] = useState(null);
-  const [progress, setProgress] = useState(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const fetchProgress = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
+    const unsubscribe = auth.onAuthStateChanged((currUser) => {
+      if (currUser) setUser(currUser);
+    });
+    return () => unsubscribe();
+  }, []);
 
-      const courseSnap = await getDoc(doc(db, "courses", courseId));
-      const progressSnap = await getDoc(doc(db, "studentProgress", `${user.uid}_${courseId}`));
-      const enrollmentSnap = await getDoc(doc(db, "enrollments", `${user.uid}_${courseId}`));
-
+  useEffect(() => {
+    const fetchCourseData = async () => {
+      const courseRef = doc(db, "courses", courseId);
+      const courseSnap = await getDoc(courseRef);
       if (courseSnap.exists()) setCourse(courseSnap.data());
-      if (progressSnap.exists()) setProgress(progressSnap.data());
-
-      if (enrollmentSnap.exists()) {
-        const data = enrollmentSnap.data();
-        const completedCount = completedModules.length;
-        const completedModules =Data.completedModules || [];
-
-        const calculated = totalModules === 0 ? 0 : Math.floor((completedCount / totalModules)) * 100;
-        setPercent(calculated);
-      }
     };
-
-    fetchProgress();
-  }, [courseId, totalModules]);
+    fetchCourseData();
+  }, [courseId]);
 
   useEffect(() => {
-    const checkEligibility = () => {
-      if (!progress || !course) return;
-
-      const allCompleted = course.modules.every((mod, index) => {
-        const prog = progress.moduleProgress?.[index];
-        if (!prog) return false;
-
-        const videosDone = prog.videosWatched?.length === mod.videos.length &&
-          prog.videosWatched.every((v) => v === true);
-
-        return videosDone && prog.testPassed === true;
-      });
-
-      setEligible(allCompleted);
-    };
-
-    checkEligibility();
-  }, [progress, course]);
-
-  useEffect(() => {
-    if (!progress && percent === 100) {
-      setEligible(true);
+    if (totalModules > 0) {
+      const completedCount = completedModules?.length || 0;
+      const calculated = Math.floor((completedCount / totalModules) * 100);
+      setPercent(calculated);
+      if (calculated === 100) setEligible(true);
     }
-  }, [percent, progress]);
+  }, [completedModules, totalModules]);
 
   const downloadCertificate = async () => {
-    const user = auth.currentUser;
     if (!user || !course) return;
 
     const fullName = user.displayName || "Student";
@@ -149,7 +123,7 @@ export default function ProgressBar({ courseId, totalModules }) {
   };
 
   return (
-    <div className="w-full mt-4 p-4 border rounded-xl shadow bg-white">
+    <div className="w-full mt-4 p-4 border rounded-xl shadow bg-white text-black">
       <h2 className="text-lg font-semibold mb-2">Course Progress</h2>
       <div className="w-full bg-gray-200 rounded-full h-4">
         <div
@@ -157,21 +131,22 @@ export default function ProgressBar({ courseId, totalModules }) {
           style={{ width: `${percent}%` }}
         ></div>
       </div>
-      <p className="text-sm mt-1 text-center">{Math.round(percent)}% completed</p>
+      <p className="text-sm mt-1 text-center">{percent}% completed</p>
 
       {eligible ? (
-        <button
-          onClick={downloadCertificate}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
-          🎓 Download Certificate
-        </button>
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={downloadCertificate}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            🎓 Download Certificate
+          </button>
+        </div>
       ) : (
-        <p className="mt-4 text-sm text-gray-600">
-          Complete all videos & tests in all modules to unlock your certificate.
+        <p className="mt-4 text-sm text-gray-600 text-center">
+          Complete all modules to unlock your certificate.
         </p>
       )}
     </div>
   );
 }
-

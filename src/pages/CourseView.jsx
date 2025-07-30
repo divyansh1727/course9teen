@@ -1,3 +1,4 @@
+// CourseView.jsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -6,6 +7,10 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
+  collection,
+  query,
+  where,
+  getDocs,
 } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -15,11 +20,6 @@ function getYouTubeEmbedUrl(url) {
   const match = url.match(/(?:v=|youtu\.be\/)([^&]+)/);
   const videoId = match ? match[1] : null;
   return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
-}
-
-function extractYouTubeID(url) {
-  const match = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/);
-  return match ? match[1] : null;
 }
 
 export default function CourseView() {
@@ -32,6 +32,10 @@ export default function CourseView() {
   const [user, setUser] = useState(null);
   const [enrolling, setEnrolling] = useState(false);
   const [completedModules, setCompletedModules] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [averageRating, setAverageRating] = useState(0);
+  const [newReview, setNewReview] = useState({ rating: 0, text: "" });
+  const [hasSubmittedReview, setHasSubmittedReview] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -54,6 +58,7 @@ export default function CourseView() {
 
         const data = courseSnap.data();
         setCourse({ id: courseSnap.id, ...data });
+        await fetchCourseReviews(currentUser.uid);
 
         const enrollmentRef = doc(db, "enrollments", `${currentUser.uid}_${id}`);
         const enrollmentSnap = await getDoc(enrollmentRef);
@@ -112,11 +117,82 @@ export default function CourseView() {
     setCompletedModules(newCompleted);
   };
 
+  const fetchCourseReviews = async (uid) => {
+    const q = query(collection(db, "courseReviews"), where("courseId", "==", id));
+    const snapshot = await getDocs(q);
+    const fetched = snapshot.docs.map((doc) => doc.data());
+    setReviews(fetched);
+
+    const alreadyReviewed = snapshot.docs.find((doc) => doc.data().userId === uid);
+    setHasSubmittedReview(!!alreadyReviewed);
+
+    if (fetched.length > 0) {
+      const avg = fetched.reduce((sum, r) => sum + r.rating, 0) / fetched.length;
+      setAverageRating(avg.toFixed(1));
+    }
+  };
+
+  const handleReviewSubmit = async () => {
+    if (!user) return alert("Login required");
+
+    const reviewId = `${user.uid}_${id}`;
+    const reviewRef = doc(db, "courseReviews", reviewId);
+
+    await setDoc(reviewRef, {
+      courseId: id,
+      userId: user.uid,
+      userName: user.displayName || "Anonymous",
+      rating: newReview.rating,
+      reviewText: newReview.text,
+      createdAt: serverTimestamp(),
+    });
+
+    const q = query(collection(db, "courseReviews"), where("courseId", "==", id));
+    const snapshot = await getDocs(q);
+    const allRatings = snapshot.docs.map((doc) => doc.data().rating);
+    const total = allRatings.reduce((a, b) => a + b, 0);
+    const avg = (total / allRatings.length).toFixed(1);
+
+    const courseRef = doc(db, "courses", id);
+    await updateDoc(courseRef, {
+      avgRating: Number(avg),
+      ratingCount: allRatings.length,
+    });
+
+    setNewReview({ rating: 0, text: "" });
+    alert("Review submitted!");
+    fetchCourseReviews(user.uid);
+  };
+
   if (loading) return <div className="text-white text-center mt-20">Loading course...</div>;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       <div className="max-w-4xl mx-auto bg-gray-800 rounded-xl p-6 shadow-lg">
+        {isEnrolled && course?.modules?.length > 0 && (
+          <aside className="bg-gray-900 p-4 rounded-lg md:sticky md:top-6 h-fit col-span-1 hidden md:block">
+            <h2 className="text-lg font-semibold mb-3 text-green-300">Course Modules</h2>
+            <ul className="space-y-2">
+              {course.modules.map((mod, idx) => (
+                <li
+                  key={idx}
+                  onClick={() => {
+                    const moduleEl = document.getElementById(`module-${idx}`);
+                    if (moduleEl) moduleEl.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className={`cursor-pointer p-2 rounded-lg ${
+                    completedModules.includes(idx)
+                      ? "bg-green-700 text-white"
+                      : "bg-gray-700 hover:bg-gray-600"
+                  }`}
+                >
+                  ✅ {mod.title}
+                </li>
+              ))}
+            </ul>
+          </aside>
+        )}
+
         <h1 className="text-3xl font-bold mb-2">{course?.title}</h1>
         <p className="text-gray-300 mb-6">{course?.description}</p>
 
@@ -149,42 +225,33 @@ export default function CourseView() {
             <div className="mt-6">
               <h3 className="text-lg font-semibold text-green-400 mb-2">Your Progress:</h3>
               <ProgressBar
-  courseId={id}
-  totalModules={course.modules.length}
-  completedModules={completedModules}
-/>
+                courseId={id}
+                totalModules={course.modules.length}
+                completedModules={completedModules}
+                courseTitle={course.title}
 
+              />
             </div>
 
             {course.modules.map((module, index) => {
-              let resources = [];
-
-              if (Array.isArray(module.resources)) {
-                resources = module.resources;
-              } else if (typeof module.resources === "string") {
-                try {
-                  resources = JSON.parse(module.resources);
-                } catch {
-                  resources = [];
-                }
-              }
+              const resources = Array.isArray(module.resources)
+                ? module.resources
+                : typeof module.resources === "string"
+                ? JSON.parse(module.resources || "[]")
+                : [];
 
               return (
-                <div key={index} className="mb-10 bg-gray-700 p-4 rounded-lg mt-6">
+                <div key={index} id={`module-${index}`} className="mb-10 bg-gray-700 p-4 rounded-lg mt-6">
                   <h2 className="text-xl font-semibold mb-2">{module.title}</h2>
 
                   {module.videoUrl ? (
-                    <>
-                      <iframe
-                        className="w-full h-64 rounded-lg mb-4"
-                        src={getYouTubeEmbedUrl(module.videoUrl)}
-                        title={module.title}
-                        frameBorder="0"
-                        allowFullScreen
-                      ></iframe>
-
-                      
-                    </>
+                    <iframe
+                      className="w-full h-64 rounded-lg mb-4"
+                      src={getYouTubeEmbedUrl(module.videoUrl)}
+                      title={module.title}
+                      frameBorder="0"
+                      allowFullScreen
+                    ></iframe>
                   ) : (
                     <p className="text-red-400">No video available for this module.</p>
                   )}
@@ -221,7 +288,9 @@ export default function CourseView() {
                           : "bg-blue-600 hover:bg-blue-700"
                       }`}
                     >
-                      {completedModules.includes(index) ? "✅ Module Completed" : "Mark as Complete"}
+                      {completedModules.includes(index)
+                        ? "✅ Module Completed"
+                        : "Mark as Complete"}
                     </button>
 
                     <button
@@ -235,10 +304,6 @@ export default function CourseView() {
               );
             })}
           </>
-        )}
-
-        {isEnrolled && (!course.modules || course.modules.length === 0) && (
-          <p className="text-gray-400 mt-6">No modules added to this course yet.</p>
         )}
       </div>
     </div>

@@ -4,7 +4,6 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { FaBookOpen, FaCheckCircle } from "react-icons/fa";
 
-
 export default function CourseDetail() {
   const { courseId } = useParams();
   const navigate = useNavigate();
@@ -60,7 +59,7 @@ export default function CourseDetail() {
               onClick={() => navigate(`/instructor/${course.createdBy}`)}
             >
               <img
-                src={instructor.photoURL || divyanshPhoto}
+                src={instructor.photoURL || "/default-instructor.png"}
                 alt={instructor.name}
                 className="w-32 h-32 rounded-full object-cover border-2 border-white"
               />
@@ -85,10 +84,29 @@ export default function CourseDetail() {
           <span>📚 Modules: {course.modules?.length || 0}</span>
         </div>
 
-        {/* More UI can go here */}
+        {/* QR Code Payment Section for Paid Courses */}
+        {course.price > 0 && (
+          <div className="mt-8 text-center border-t border-gray-700 pt-6">
+            <h2 className="text-2xl font-semibold mb-4 text-green-400">
+              This is a Paid Course
+            </h2>
+            <p className="text-gray-400 mb-2">
+              Price: <span className="text-yellow-300 font-bold">₹{course.price}</span>
+            </p>
+            <p className="text-sm text-gray-500 mb-4">
+              Scan the QR code below to make the payment
+            </p>
+            <img
+              src="/qr-code-upi.png" // 🔁 Replace this with your QR code image path or URL
+              alt="QR Code"
+              className="mx-auto w-64 h-64 rounded-lg border-2 border-yellow-500"
+            />
+            <p className="text-sm text-gray-600 mt-2 italic">
+              After payment, click on Enroll to access this course.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-

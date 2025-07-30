@@ -20,7 +20,32 @@ export default function StudentQuizPage() {
   const [loading, setLoading] = useState(true);
   const [attempts, setAttempts] = useState([]);
   const [user, setUser] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(600); // ⏱️ 10 mins
 
+  // 🧠 Format function to display timer nicely
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // 🕒 Countdown logic
+  useEffect(() => {
+    if (!submitted && timeLeft > 0) {
+      const timer = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+
+    // Auto-submit when timer hits 0
+    if (timeLeft === 0 && !submitted) {
+      alert("⏰ Time's up! Auto-submitting your quiz.");
+      handleSubmit();
+    }
+  }, [timeLeft, submitted]);
+
+  // 📦 Initial data load
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -31,7 +56,6 @@ export default function StudentQuizPage() {
 
         const currentUser = auth.currentUser;
         if (!currentUser) return;
-
         setUser(currentUser);
 
         const attemptsQuery = query(
@@ -40,13 +64,12 @@ export default function StudentQuizPage() {
           where("courseId", "==", courseId),
           where("moduleIndex", "==", parseInt(moduleIndex))
         );
-
         const attemptsSnap = await getDocs(attemptsQuery);
         const attemptList = attemptsSnap.docs.map((doc) => doc.data());
 
         setAttempts(attemptList);
         if (attemptList.length >= 3) {
-          setSubmitted(true); // Block quiz if 3 attempts already
+          setSubmitted(true);
         }
       } catch (err) {
         console.error("Error loading quiz or attempts:", err);
@@ -109,7 +132,16 @@ export default function StudentQuizPage() {
 
   return (
     <div className="max-w-3xl mx-auto p-6 text-white bg-gray-900 rounded-lg mt-8">
-      <h2 className="text-2xl font-bold mb-6">Module {moduleIndex} Quiz</h2>
+      <h2 className="text-2xl font-bold mb-4">Module {moduleIndex} Quiz</h2>
+
+      {/* ⏱️ Timer Display */}
+      {!submitted && (
+        <div className="text-center mb-4">
+          <p className="text-lg font-bold text-red-400">
+            Time Left: {formatTime(timeLeft)}
+          </p>
+        </div>
+      )}
 
       {submitted && attempts.length >= 3 && (
         <div className="mb-4 text-red-400 font-semibold text-center">
@@ -125,7 +157,9 @@ export default function StudentQuizPage() {
 
       {questions.map((q, index) => (
         <div key={q.id} className="mb-6 bg-gray-800 p-4 rounded">
-          <p className="font-semibold mb-2">{index + 1}. {q.question}</p>
+          <p className="font-semibold mb-2">
+            {index + 1}. {q.question}
+          </p>
           {q.options.map((opt, i) => {
             const isSelected = answers[q.id] === i;
             const isCorrect = q.correctAnswer === i;
@@ -179,5 +213,6 @@ export default function StudentQuizPage() {
     </div>
   );
 }
+
 
 
