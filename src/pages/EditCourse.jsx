@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import { saveCourse } from "../services/saveCourse";
 import { Link } from "react-router-dom";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -86,7 +87,7 @@ export default function EditCourse() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await updateDoc(doc(db, "courses", id), {
+      await saveCourse(id, {
         ...form,
       });
       alert("✅ Course updated successfully!");

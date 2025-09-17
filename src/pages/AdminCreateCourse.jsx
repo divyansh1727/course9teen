@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { db } from "../firebase";
+import { saveCourse } from "../services/saveCourse";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 export default function AdminCreateCourse() {
@@ -21,24 +22,27 @@ export default function AdminCreateCourse() {
   };
 
   const handleCourseCreate = async () => {
-    try {
-      await addDoc(collection(db, "courses"), {
-        title,
-        description,
-        instructor,
-        modules,
-        students: [],
-        createdAt: serverTimestamp(),
-      });
-      alert("✅ Course created!");
-      setTitle(""); setDescription(""); setInstructor("");
-      setModules([{ title: "", videoUrl: "", resources: [{ label: "", url: "" }] }]);
-    } catch (err) {
-      console.error("❌ Failed to create course:", err);
-      alert("Error creating course");
-    }
-  };
+  try {
+    const newCourseRef = doc(collection(db, "courses")); // generate ID
+    const courseId = newCourseRef.id;
 
+    await saveCourse(courseId, {
+      title,
+      description,
+      instructor,
+      modules,
+      students: [],
+      createdAt: serverTimestamp(),
+    });
+
+    alert("✅ Course created!");
+    setTitle(""); setDescription(""); setInstructor("");
+    setModules([{ title: "", videoUrl: "", resources: [{ label: "", url: "" }] }]);
+  } catch (err) {
+    console.error("❌ Failed to create course:", err);
+    alert("Error creating course");
+  }
+};
   return (
     <div className="p-6 max-w-4xl mx-auto text-white bg-gray-900 min-h-screen">
       <h1 className="text-3xl font-bold mb-4">Create New Course</h1>
