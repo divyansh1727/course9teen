@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import PaymentModal from "../Components/PaymentModal";
 import ProgressBar from "../Components/ProgressBar";
 
 function getYouTubeEmbedUrl(url) {
@@ -33,6 +34,7 @@ export default function CourseView() {
   const [enrolling, setEnrolling] = useState(false);
   const [completedModules, setCompletedModules] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [showPayment, setShowPayment] = useState(false);
   const [averageRating, setAverageRating] = useState(0);
   const [newReview, setNewReview] = useState({ rating: 0, text: "" });
   const [hasSubmittedReview, setHasSubmittedReview] = useState(false);
@@ -197,28 +199,36 @@ export default function CourseView() {
         <p className="text-gray-300 mb-6">{course?.description}</p>
 
         {isEnrolled ? (
-          <div className="flex flex-col items-start space-y-3 mb-6">
-            <span className="inline-block px-4 py-1 text-sm bg-green-700 text-white rounded-full">
-              ✅ You are enrolled
-            </span>
-            <button
-              onClick={() => navigate("/student-dashboard")}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold"
-            >
-              Go to Dashboard
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={handleEnroll}
-            disabled={enrolling}
-            className={`mt-4 px-6 py-2 rounded-lg font-semibold ${
-              enrolling ? "bg-gray-500 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
-            }`}
-          >
-            {enrolling ? "Enrolling..." : "Enroll Now"}
-          </button>
-        )}
+  <div className="flex flex-col items-start space-y-3 mb-6">
+    <span className="inline-block px-4 py-1 text-sm bg-green-700 text-white rounded-full">
+      ✅ You are enrolled
+    </span>
+    <button
+      onClick={() => navigate("/student-dashboard")}
+      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold"
+    >
+      Go to Dashboard
+    </button>
+  </div>
+) : course.priceType === "paid" ? (
+  <button
+    onClick={() => { console.log("BUY CLICKED");
+      setShowPayment(true)}}
+    className="mt-4 px-6 py-2 rounded-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-black"
+  >
+    💰 Buy Now
+  </button>
+) : (
+  <button
+    onClick={handleEnroll}
+    disabled={enrolling}
+    className={`mt-4 px-6 py-2 rounded-lg font-semibold ${
+      enrolling ? "bg-gray-500 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
+    }`}
+  >
+    {enrolling ? "Enrolling..." : "Enroll Now"}
+  </button>
+)}
 
         {isEnrolled && course.modules?.length > 0 && (
           <>
@@ -300,12 +310,23 @@ export default function CourseView() {
                       Start Test for this Module
                     </button>
                   </div>
+                  
                 </div>
               );
             })}
           </>
         )}
       </div>
+      {showPayment && (
+  <PaymentModal
+    course={course}
+    onClose={() => setShowPayment(false)}
+    onSuccess={async () => {
+      setShowPayment(false);
+      await handleEnroll();
+    }}
+  />
+)}
     </div>
   );
 }

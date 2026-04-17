@@ -61,6 +61,7 @@ export default function Home() {
 
       setLoading(false);
     });
+    
 
     const fetchInstructors = async () => {
       try {
