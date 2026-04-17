@@ -16,6 +16,7 @@ import { db, auth } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import PaymentModal from "../Components/PaymentModal";
 import ProgressBar from "../Components/ProgressBar";
+import { askCourseAI } from "../utils/aiChat";
 
 function getYouTubeEmbedUrl(url) {
   const match = url.match(/(?:v=|youtu\.be\/)([^&]+)/);
@@ -38,6 +39,9 @@ export default function CourseView() {
   const [averageRating, setAverageRating] = useState(0);
   const [newReview, setNewReview] = useState({ rating: 0, text: "" });
   const [hasSubmittedReview, setHasSubmittedReview] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -110,6 +114,17 @@ export default function CourseView() {
       setEnrolling(false);
     }
   };
+
+  const handleAskAI = async () => {
+  if (!question) return;
+
+  setAiLoading(true);
+
+  const res = await askCourseAI(question, course);
+
+  setAnswer(res);
+  setAiLoading(false);
+};
 
   const handleMarkComplete = async (index) => {
     if (!user) return;
@@ -310,12 +325,32 @@ export default function CourseView() {
                       Start Test for this Module
                     </button>
                   </div>
-                  
+              
                 </div>
               );
             })}
           </>
         )}
+        <div className="mt-10 bg-gray-800 p-4 rounded-lg">
+  <h2 className="text-xl font-semibold mb-3">🤖 Ask AI</h2>
+
+  <input
+    value={question}
+    onChange={(e) => setQuestion(e.target.value)}
+    placeholder="Ask something about this course..."
+    className="w-full p-2 rounded bg-gray-700 mb-3"
+  />
+
+  <button onClick={handleAskAI} className="bg-purple-600 px-4 py-2 rounded">
+    {aiLoading ? "Thinking..." : "Ask"}
+  </button>
+
+  {answer && (
+    <div className="mt-4 bg-gray-700 p-3 rounded">
+      {answer}
+    </div>
+  )}
+</div>
       </div>
       {showPayment && (
   <PaymentModal
