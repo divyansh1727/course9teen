@@ -9,6 +9,7 @@ import { auth } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import { getDoc, doc } from "firebase/firestore";
 import { db } from "../firebase";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 export default function SignInPage() {
   const [phone, setPhone] = useState("");
@@ -41,29 +42,20 @@ export default function SignInPage() {
     return () => unsub();
   }, [navigate]);
 
-  const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      try {
-        window.recaptchaVerifier = new RecaptchaVerifier(
-          auth,
-          "recaptcha-container",
-          {
-            size: "invisible",
-            callback: () => {
-              console.log("reCAPTCHA verified");
-            },
-            "expired-callback": () => {
-              console.warn("reCAPTCHA expired. Try again.");
-            },
-          },
-          auth
-        );
-        window.recaptchaVerifier.render();
-      } catch (err) {
-        console.error("Recaptcha init error", err);
+ const setupRecaptcha = () => {
+  if (!window.recaptchaVerifier) {
+    window.recaptchaVerifier = new RecaptchaVerifier(
+      auth,                     // ✅ FIRST param = auth
+      "recaptcha-container",    // ✅ SECOND = container ID
+      {
+        size: "invisible",
+        callback: () => {
+          console.log("reCAPTCHA solved");
+        },
       }
-    }
-  };
+    );
+  }
+};
 
   const handleSendOtp = async () => {
     if (!phone || !phone.startsWith("+") || phone.length < 10) {
@@ -102,6 +94,28 @@ export default function SignInPage() {
       alert("Invalid OTP");
     }
   };
+  const handleGoogleLogin = async () => {
+  try {
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+
+    const user = result.user;
+
+    // check if user exists in Firestore
+    const userRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists()) {
+      navigate("/dashboard");
+    } else {
+      navigate("/register");
+    }
+
+  } catch (err) {
+    console.error("Google login error:", err);
+    alert(err.message);
+  }
+};
 
   const handleEmailLogin = async () => {
     try {
@@ -150,6 +164,12 @@ export default function SignInPage() {
           >
             Send OTP
           </button>
+          <button
+  onClick={handleGoogleLogin}
+  className="w-full bg-red-500 text-white py-2 rounded-md mt-4 hover:bg-red-600 transition"
+>
+  Continue with Google
+</button>
 
           {showOtpInput && (
             <>

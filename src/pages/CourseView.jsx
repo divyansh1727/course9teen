@@ -345,9 +345,10 @@ export default function CourseView() {
     {aiLoading ? "Thinking..." : "Ask"}
   </button>
 
-  {answer && (
-    <div className="mt-4 bg-gray-700 p-3 rounded">
-      {answer}
+
+ {answer && (
+    <div className="mt-4 bg-gray-700 p-3 rounded whitespace-pre-line">
+      🤖 {answer}
     </div>
   )}
 </div>

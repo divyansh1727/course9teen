@@ -1,27 +1,28 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const genAI = new GoogleGenerativeAI("YOUR_API_KEY");
+// utils/aiChat.js
 
 export async function askCourseAI(question, course) {
-  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  const q = question.toLowerCase();
 
-  const courseContent = course.modules
-    ?.map((m) => m.title)
-    .join("\n");
+  let response = "";
 
-  const prompt = `
-You are a helpful course assistant.
+  if (q.includes("explain")) {
+    response = `This course "${course.title}" teaches you about ${course.description}. It is structured into modules to help you learn step by step.`;
+  } 
+  else if (q.includes("summary")) {
+    response = `Summary: This course covers key concepts across ${course.modules.length} modules designed for progressive learning.`;
+  } 
+  else if (q.includes("modules")) {
+    response =
+      `This course has ${course.modules.length} modules:\n` +
+      course.modules.map((m, i) => `${i + 1}. ${m.title}`).join("\n");
+  } 
+  else {
+    response =
+      "This course helps you learn step-by-step with structured modules and practical content.";
+  }
 
-Course Title: ${course.title}
-Course Description: ${course.description}
-Modules: ${courseContent}
+  // simulate AI delay
+  await new Promise((res) => setTimeout(res, 800));
 
-Student Question:
-${question}
-
-Answer clearly and simply:
-`;
-
-  const result = await model.generateContent(prompt);
-  return result.response.text();
+  return response;
 }
